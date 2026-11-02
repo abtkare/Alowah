@@ -1,0 +1,35 @@
+# مثبّت خدمة التوقيع الإلكتروني لمنصة ألواح (الجلسة 15) — للتشغيل من Hostinger Docker Manager ← Compose from URL
+# حاوية لمرة واحدة: تنفّذ سكربت التثبيت على الخادم نفسه (alwah-esign/deploy-vps.sh من zip الجلسة 15)
+# فتثبّت الخدمة في /opt/alwah-esign، وتضيف موقعاً واحداً في nginx بشهادة HTTPS، وتربطها بالمنصة، ثم تتوقف.
+# لا تمسّ المواقع والحاويات الأخرى. السجل الكامل: /root/esign-deploy.log ويظهر أيضاً في Logs هنا.
+# «Redeploy» لاحقاً = تحديث الخدمة بآخر zip مرفوع (المفاتيح تبقى كما هي).
+name: alwah-esign-installer
+
+services:
+  installer:
+    image: ubuntu:24.04
+    privileged: true
+    pid: host
+    network_mode: host
+    restart: "no"
+    command:
+      - nsenter
+      - -t
+      - "1"
+      - -m
+      - -u
+      - -i
+      - -n
+      - -p
+      - --
+      - bash
+      - -c
+      - |
+        set -o pipefail
+        cd /root || exit 1
+        Z=$$(curl -fsSL https://api.github.com/repos/abtkare/Alowah/contents/ | grep -o '"name": *"alwah-platform-zz-session[0-9]*\.zip"' | grep -o 'alwah[^"]*' | sort -V | tail -1)
+        Z=$${Z:-alwah-platform-zz-session15.zip}
+        echo "== تنزيل $$Z"
+        curl -fsSL -o alwah-esign-src.zip "https://raw.githubusercontent.com/abtkare/Alowah/main/$$Z" || { echo "✗ تعذّر التنزيل"; exit 1; }
+        rm -rf alwah-esign-src && python3 -m zipfile -e alwah-esign-src.zip alwah-esign-src || { echo "✗ تعذّر فك الملف"; exit 1; }
+        PAIR=PAIR81ac0a85d680ef98ba4bc20c bash /root/alwah-esign-src/alwah-esign/deploy-vps.sh 2>&1 | tee /root/esign-deploy.log
